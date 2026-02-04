@@ -6,23 +6,24 @@ A state-driven inventory management application built with **React and Django**.
 This project focuses on state management, derived state, persistence, and clean UI rendering.
 
 🔗 **Live Demo:**  
-Coming soon...
+- Coming soon...
 
 ---
 
 ## Features
 
-Coming soon...
+- Coming soon...
+
 ---
 
 ## Technical Highlights
 
 ### Application State
-The repo boundary is the **single source of truth** for the application.  
+Postgres is the **single source of truth** for the application.  
 
 
 ### Persistence
-Inventory data is persisted using Postgres.
+All invariants are valdiated and enforced by repo.py and persisted using Postgresql.
 
 ### Invariants
 - Product names are trimmed and required
@@ -43,7 +44,7 @@ Inventory data is persisted using Postgres.
 ## Project Structure 
 
 ```
-Inventory-System/
+Inventory-System-v2/
 ├── repo.py
 └── README.md
 ```
@@ -52,12 +53,13 @@ Inventory-System/
 
 ## Future Improvements
 
-Coming soon...
+- Coming soon...
+
 ---
 
 
-## Author
+## Authors
 
+**Anchor**
 **Nick**  
-Aspiring Software Engineer  
-Focused on fundamentals, systems thinking, and long-term growth
+Nick is an aspiring software engineer focused on systems design, and long-term growth
