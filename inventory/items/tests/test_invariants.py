@@ -1,24 +1,23 @@
-
-from ..domain.invariants import  validate_name, validate_qty, ensure_unique_name
-
-
-def test_normalize_name():
-    item = validate_name("c   ")
-    assert item != ""
+# inventory/items/tests/test_invariants.py
+import pytest
+from items.domain.invariants import validate_name, validate_qty, ensure_unique_name
+from items.domain.errors import InvariantError, DuplicateNameError
 
 
-def test_rejects_negative_qty():
-    item = 1
-    if not isinstance(item, int) or item < 0: 
-        assert validate_qty(item)
+def test_validate_name_trims_and_casefolds():
+    assert validate_name("  Milk ") == "milk"
 
 
+def test_validate_name_rejects_empty():
+    with pytest.raises(InvariantError):
+        validate_name("   ")
 
-def test_name_are_unique():
-  a = "a"
-  b = ["b","c"]
-  if a not in b:
-      return
-  assert ensure_unique_name(a, b)
- 
 
+def test_validate_qty_rejects_negative():
+    with pytest.raises(InvariantError):
+        validate_qty(-1)
+
+
+def test_ensure_unique_name_raises_on_duplicate():
+    with pytest.raises(DuplicateNameError):
+        ensure_unique_name("milk", {"milk"})
