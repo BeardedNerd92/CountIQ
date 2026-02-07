@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from items.domain.errors import DuplicateNameError, InvariantError
+from items.domain.errors import InvariantError
 from items.domain.invariants import validate_name, validate_qty
 from items.domain.models import ItemModel
 from items.repo.item_repo import Repo
@@ -17,7 +17,7 @@ class InventoryService:
             validated_qty = validate_qty(qty)
             item = self._repo.create(name=normalized_name, qty=validated_qty)
 
-        except (InvariantError, DuplicateNameError) as e:
+        except (InvariantError) as e:
             return Err(e)
 
 
