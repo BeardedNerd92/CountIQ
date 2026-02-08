@@ -1,5 +1,5 @@
 from django.test import TestCase
-from items.services.inventory_service import create_item
+from items.services.inventory_service import create_item, delete_item
 from items.domain.models import Item
 
 
@@ -39,3 +39,11 @@ class CreateItemServiceTests(TestCase):
             create_item("apple", 3)
 
         self.assertEqual(Item.objects.count(), 1)
+
+    def test_delete_idempotent(self):
+        item = create_item("apple", 2)
+        item_id = item.id
+
+        self.assertTrue(Item.objects.filter(id=item_id).exists())
+        delete_item(item_id)
+        self.assertFalse(Item.objects.filter(id=item_id).exists())

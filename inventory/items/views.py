@@ -1,7 +1,7 @@
 import json
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
-from items.services.inventory_service import create_item
+from items.services.inventory_service import create_item, delete_item
 
 
 @csrf_exempt
@@ -31,3 +31,11 @@ def create_item_view(request):
 
     except ValueError as e:
         return JsonResponse({"error": str(e)}, status=400)
+
+@csrf_exempt
+def delete_item_view(request, item_id: str):
+    if request.method != "DELETE":
+       return JsonResponse({"error": "DELETE only"}, status=405)
+    
+    delete_item(item_id)
+    return HttpResponse(status=204)
