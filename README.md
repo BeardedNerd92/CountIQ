@@ -1,131 +1,168 @@
-# Inventory System v2 — Backend Systems Project
+# 📦 CountIQ — Systems-First Inventory Engine
 
-This project is a backend-only inventory system built to practice real backend engineering fundamentals:
+**CountIQ** is a backend systems project focused on enforcing **correct state transitions** rather than just building CRUD endpoints.
 
-* state modeling
+This project explores how real services handle:
+
+* authentication
+* ownership
 * invariants
-* transactional persistence
-* correctness under concurrency
+* state mutation
+* correctness under failure
+
+Originally built as an inventory API, it was renamed to **CountIQ** to reflect its purpose:
+
+> Count state correctly.
+> Control who can change it.
+> Prove the system behaves correctly.
 
 There is **no UI**.
-All interaction happens through HTTP endpoints using `curl`.
-
-The goal is not rapid feature building — it is learning how to design systems that preserve correctness under all transitions.
+All interaction happens through HTTP using `curl`.
 
 ---
 
-## Architecture
+# 🧭 System Philosophy
+
+Most apps focus on endpoints.
+
+CountIQ focuses on guarantees:
+
+* Who can mutate state?
+* When must state remain unchanged?
+* How do we prove correctness?
+
+Core rule:
+
+```
+Unauthorized request ⇒ state does not change
+```
+
+---
+
+# 🏗 Architecture
 
 ```
 transport → service → model → database
 ```
 
-Concrete stack:
+### Transport
 
-* Django (transport + models)
-* Service layer (state transitions + transactions)
-* SQLite (persistence)
+* Parses HTTP
+* Resolves user from token
+* Returns HTTP responses
 
-No repository layer is used.
-The Django model + database are the source of truth.
+### Service
 
----
+* Enforces ownership
+* Validates invariants
+* Controls state transitions
 
-## System Design Principles
+### Database
 
-### State Model
-
-```
-S = Map[id → item]
-item = { id, name, qty }
-```
-
-All operations are state transitions:
-
-```
-S' = f(S, input)
-```
+* Stores source of truth
+* Enforces schema rules
 
 ---
 
-### Invariants (truth)
+# 🔄 Request Flow Diagram
 
-The system guarantees:
+```
+Client (curl)
+   ↓
+Transport layer
+   ↓
+Auth check (token → user)
+   ↓
+Service layer
+   ↓
+Ownership + invariant checks
+   ↓
+Database mutation (if allowed)
+```
 
-* `name.strip() ≠ ""`
-* `qty ∈ ℤ`
-* `qty ≥ 0`
-* `name` is unique
+If any step fails:
 
-If any invariant fails:
+```
+request rejected
+state unchanged
+```
+
+---
+
+# 🧮 The Math (explained simply)
+
+You’ll see math-like notation in this repo.
+Here’s what it means in plain English.
+
+### System state
+
+```
+S = everything stored in the database
+```
+
+Each item:
+
+```
+item = { id, name, qty, owner_id }
+```
+
+---
+
+### Requests change state
+
+```
+S' = f(S, request)
+```
+
+Translation:
+
+> The new state is the result of applying a request to the current state.
+
+Example:
+
+```
+POST → adds item
+DELETE → removes item
+```
+
+---
+
+### Most important rule
+
+If request is unauthorized:
 
 ```
 S' = S
 ```
 
-No mutation is allowed.
+Translation:
+
+> Nothing changes.
+
+We test this explicitly.
 
 ---
 
-### Invariant Enforcement
+# 🔐 Authentication Model (v2-auth)
 
-Invariants are:
-
-* centralized in `invariants.py`
-* pure (no mutation)
-* dict in → dict out
-* deterministic
-
-They are enforced at the **model boundary** before any database commit.
-
-Mutation happens only at:
+Development auth uses simple tokens:
 
 ```
-model.save()
+Authorization: Bearer token-a
 ```
+
+Token maps to user:
+
+```
+token-a → user-a
+token-b → user-b
+```
+
+All write routes require authentication.
 
 ---
 
-### Transition Law
-
-All transitions follow:
-
-```
-validate → commit → return
-```
-
-Never:
-
-```
-commit → fix later
-```
-
-This guarantees database correctness and rollback safety.
-
----
-
-### Transactions
-
-All write operations are wrapped in:
-
-```
-transaction.atomic()
-```
-
-This ensures:
-
-```
-valid → commit
-invalid → rollback
-```
-
----
-
-## API Endpoints
-
-All interaction is done via `curl`.
-
----
+# 📡 Endpoints
 
 ## Create Item
 
@@ -133,315 +170,197 @@ All interaction is done via `curl`.
 POST /items
 ```
 
+Create an item owned by the authenticated user.
+
+### Example
+
 ```bash
 curl -X POST http://127.0.0.1:8000/items \
+  -H "Authorization: Bearer token-a" \
   -H "Content-Type: application/json" \
-  -d '{"name":"apple","qty":5}'
+  -d '{"name":"milk","qty":2}'
 ```
 
-Success:
+Response:
 
-```
-201 Created
+```json
 {
-  "id": "UUID",
-  "name": "apple",
-  "qty": 5
+  "id": "uuid",
+  "name": "milk",
+  "qty": 2,
+  "owner_id": "user-a"
 }
 ```
 
-Duplicate names or invalid input return `400`.
+### What happens internally
+
+```
+token → user_id
+user_id → owner_id
+item saved
+```
+
+If no auth token:
+
+```
+401 unauthorized
+```
 
 ---
 
-## Delete Item (idempotent)
+## Delete Item
 
 ```
-DELETE /items/<uuid>
+DELETE /items/<id>
 ```
+
+Only the owner can delete.
+
+### Non-owner attempt
 
 ```bash
-curl -X DELETE http://127.0.0.1:8000/items/<UUID>
+curl -X DELETE http://127.0.0.1:8000/items/<id> \
+  -H "Authorization: Bearer token-b"
 ```
-
-Success:
-
-```
-204 No Content
-```
-
-Deleting a non-existent item is safe and idempotent.
-
----
-
-# Update Quantity (atomic transition)
-
-```
-PATCH /items/<uuid>/qty
-```
-
-Body:
-
-```json
-{ "delta": -1 }
-```
-
----
-
-## What `delta` means
-
-`delta` represents the **change** to apply to quantity.
-
-| delta | result         |
-| ----- | -------------- |
-| -1    | decrement by 1 |
-| +5    | increment by 5 |
-| 0     | no change      |
-
-This endpoint does **not** set quantity directly.
-
-Instead:
-
-```
-qty' = qty + delta
-```
-
-This prevents race conditions and ensures atomic transitions.
-
----
-
-## Service-layer implementation
-
-The transition is implemented using a single guarded atomic update.
-
-```python
-updated = (
-    Item.objects
-    .filter(id=item_id, qty__gte=-delta)
-    .update(qty=F("qty") + delta)
-)
-```
-
-### What this does
-
-**1. Guard**
-
-```
-qty__gte=-delta
-```
-
-Ensures:
-
-```
-current_qty + delta ≥ 0
-```
-
-This prevents negative quantity.
-
----
-
-**2. Atomic update**
-
-```
-qty = qty + delta
-```
-
-Uses `F("qty")` so the DB handles concurrency safely.
-
----
-
-**3. Result handling**
-
-```python
-if updated:
-    return Item.objects.get(id=item_id)
-
-if not Item.objects.filter(id=item_id).exists():
-    return None
-
-raise ValueError("qty cannot go below 0")
-```
-
-Meaning:
-
-| Outcome                     | Meaning |
-| --------------------------- | ------- |
-| updated row                 | success |
-| no row + not exists         | 404     |
-| row exists but guard failed | 400     |
-
----
-
-## Example Success
-
-```
-qty = 5
-delta = -1
-```
-
-Result:
-
-```
-qty = 4
-200 OK
-```
-
----
-
-## Example Invariant Violation
-
-```
-qty = 0
-delta = -2
-```
-
-Would produce:
-
-```
-qty = -2 → invalid
-```
-
-Database blocks update.
 
 Response:
 
 ```
-400 Bad Request
-{
-  "error": "qty cannot go below 0"
-}
+403 forbidden
 ```
 
-State remains unchanged.
+State does not change.
 
 ---
 
-## Status Code Mapping
+### Owner delete
 
-| Result               | Status |
-| -------------------- | ------ |
-| success              | 200    |
-| not found            | 404    |
-| invalid delta        | 400    |
-| qty would go below 0 | 400    |
-
-Service contract:
-
-```
-returns Item → success
-returns None → not found
-raises ValueError → invalid
+```bash
+curl -X DELETE http://127.0.0.1:8000/items/<id> \
+  -H "Authorization: Bearer token-a"
 ```
 
-The view maps this to HTTP responses.
+Response:
+
+```
+204
+```
+
+Item removed.
 
 ---
 
-## Error Handling
+# 🔒 Invariants
 
-All endpoints return JSON.
+These must always be true:
 
-A custom project-level 404 handler ensures invalid routes also return JSON:
-
-```json
-{ "error": "not_found" }
+```
+name cannot be empty
+qty ≥ 0
+owner_id must exist
 ```
 
-instead of Django’s default HTML page.
+Ownership rule:
+
+```
+item.owner_id == request.user.id
+```
+
+If violated:
+
+```
+reject request
+state unchanged
+```
 
 ---
 
-## Running Locally
+# 🧪 Testing Strategy
 
-Install dependencies:
+The system is verified using:
+
+* unit tests
+* integration tests
+* manual curl testing
+
+Key properties tested:
 
 ```
-pip install -r requirements.txt
+unauthenticated → 401
+non-owner delete → 403
+owner delete → 204
+forbidden mutation → state unchanged
 ```
 
-Run migrations:
+---
+
+# 🏷 Version Roadmap
 
 ```
-python manage.py migrate
+v1-foundations   core architecture + invariants
+v2-auth          authentication + ownership
+v2-deploy        deployment + logging
+v3-performance   indexing + scaling
+v4-concurrency   queues + contention
+v5-ml            analytics layer
 ```
 
-Start server:
+Each milestone is tagged in Git.
+
+---
+
+# 🚀 Running Locally
 
 ```
 python manage.py runserver
 ```
 
-Run tests:
+Then use the curl commands above.
 
-```
-python manage.py test
-```
+To test auth locally, seed tokens in the session store:
 
----
-
-## Current Features
-
-* transactional create_item
-* idempotent delete_item
-* atomic qty updates
-* centralized invariant enforcement
-* database-enforced uniqueness
-* UUID primary keys
-* JSON-only responses
-* curl-driven interaction
-* state-based testing
-
----
-
-## Recent Stability Fixes
-
-While implementing the PATCH endpoint, several runtime issues were discovered and resolved:
-
-* returned `None` after successful update → false 404
-* UUID routing mismatch
-* bool treated as int
-* inconsistent error responses
-* Django HTML error pages for invalid routes
-
-Fixes:
-
-* explicit service return contract
-* UUID normalization
-* transaction wrapping
-* custom JSON 404 handler
-* strict type validation
-
-These changes improve runtime correctness and transport reliability.
-
----
-
-## Upcoming Work
-
-* remove csrf_exempt
-* authentication boundary
-* request logging
-* concurrency tests
-* PostgreSQL migration
-
----
-
-## Why this project exists
-
-Most tutorials focus on frameworks and UI.
-
-This project focuses on:
-
-```
-state
-invariants
-transactions
-correctness
+```python
+SESSIONS["token-a"] = "user-a"
+SESSIONS["token-b"] = "user-b"
 ```
 
-The goal is to build backend systems that are predictable, testable, and safe under failure.
+---
+
+# 🧠 Why CountIQ Exists
+
+This project is designed to think like a systems engineer:
+
+* enforce invariants
+* model state transitions
+* prove correctness
+* build versioned systems
+
+Not just CRUD.
 
 ---
 
-## License
+# 🔭 Next Steps
 
-MIT
+* PATCH ownership enforcement
+* deployment milestone
+* observability
+* performance tuning
+
+---
+
+# 📘 Mental Model
+
+CountIQ is a guarded state machine:
+
+```
+Authorized action → state changes
+Unauthorized action → state stays the same
+```
+
+That’s the core of the system.
+
+---
+
+# 👋 Author
+
+Built as a systems learning project focused on backend correctness, architecture, and production-minded design.
