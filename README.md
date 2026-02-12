@@ -1,5 +1,10 @@
 # 📦 CountIQ — Systems-First Inventory Engine
 
+## Project Scope
+
+See [docs/mvp.md](docs/mvp.md) for MVP scope, deliverables, and roadmap.
+
+
 **CountIQ** is a backend systems project focused on enforcing **correct state transitions** rather than just building CRUD endpoints.
 
 This project explores how real services handle:
