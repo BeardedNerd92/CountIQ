@@ -1,2 +1,3 @@
 /inventory/.env
 /venv
+inventory/*.sqlite3
