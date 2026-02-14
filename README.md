@@ -365,6 +365,48 @@ That’s the core of the system.
 
 ---
 
+## Concurrency Notes
+
+CountIQ is designed around a strict transition model:
+
+```
+S' = f(S, input)
+if invariant fails → S' = S
+```
+
+In **v2-deploy**, the service logic is correct for single-request execution, but **not yet hardened for concurrent writers**. Specifically, any flow that effectively does:
+
+```
+read → validate → write
+```
+
+can suffer from classic race conditions (TOCTOU / lost update) when two requests operate on the same record at the same time. ([Wikipedia][1])
+
+### What this means today
+
+* **DELETE** remains *API-idempotent*, but can still race with other operations unless enforced atomically at the DB boundary.
+* **PATCH/UPDATE** can experience “lost update” style anomalies if two updates interleave between read and write.
+
+### Planned hardening (Concurrency Version)
+
+A future concurrency-focused version will make writes concurrency-safe by enforcing **atomic transitions** at the database boundary, using one (or more) of these standard approaches:
+
+1. **Pessimistic row locking**
+   Lock the target row during the read/validate/write window (e.g., `SELECT … FOR UPDATE`) so concurrent writers must wait until the transaction completes. ([PostgreSQL][2])
+
+2. **Atomic conditional updates**
+   Encode the invariant directly into the update statement (e.g., update only if the invariant still holds) so the DB applies the transition as a single atomic action. ([PostgreSQL][3])
+
+These changes are intentionally deferred to the concurrency version to avoid scope creep during v2-deploy hardening.
+
+---
+
+[1]: https://en.wikipedia.org/wiki/Time-of-check_to_time-of-use?utm_source=chatgpt.com "Time-of-check to time-of-use"
+[2]: https://www.postgresql.org/docs/current/explicit-locking.html?utm_source=chatgpt.com "Documentation: 18: 13.3. Explicit Locking"
+[3]: https://www.postgresql.org/docs/current/sql-update.html?utm_source=chatgpt.com "PostgreSQL: Documentation: 18: UPDATE"
+
+---
+
 # 👋 Author
 
 Built as a systems learning project focused on backend correctness, architecture, and production-minded design.
