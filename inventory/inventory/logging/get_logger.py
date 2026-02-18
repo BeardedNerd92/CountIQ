@@ -11,7 +11,7 @@ def get_configured_logger() -> logging.Logger:
     for h in logger.handlers:
         if isinstance(h, logging.StreamHandler):
             return logger
-
+                    
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(JsonFormatter())
     logger.addHandler(handler)

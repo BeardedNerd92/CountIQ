@@ -8,11 +8,11 @@ def create_item(name: str, qty: int, user_id: str) -> Item:
     """
     Create an item owned by user_id.
 
-    Uniqueness is enforced by the DB constraint (e.g., unique per user on (owner_id, name)).
+    Uniqueness is enforced by the DB constraint (e.g., unique per user on (owner, name)).
     """
     try:
         with transaction.atomic():
-            item = Item(name=name, qty=qty, owner_id=user_id)
+            item = Item(name=name, qty=qty, owner=user_id)
             item.save()
             return item
     except IntegrityError:
@@ -27,12 +27,12 @@ def delete_item(item_id: str, user_id: str) -> None:
     - If item doesn't exist -> not found
     """
     with transaction.atomic():
-        deleted_count, _ = Item.objects.filter(id=item_id, owner_id=user_id).delete()
+        deleted_count, _ = Item.objects.filter(item_id=item_id, owner=user_id).delete()
 
     if deleted_count > 0:
         return
 
-    exists_any = Item.objects.filter(id=item_id).exists()
+    exists_any = Item.objects.filter(itme_id=item_id).exists()
     if exists_any:
         raise PermissionError("forbidden")
 
@@ -61,18 +61,18 @@ def update_qty(item_id: str, delta: int, user_id: str):
     with transaction.atomic():
         updated = (
             Item.objects
-            .filter(id=item_id, owner_id=user_id, qty__gte=-delta)
+            .filter(item_id=item_id, owner=user_id, qty__gte=-delta)
             .update(qty=F("qty") + delta)
         )
 
         if updated:
-            return Item.objects.get(id=item_id, owner_id=user_id)
+            return Item.objects.get(item_id=item_id, owner=user_id)
 
         # Disambiguate failure: missing vs forbidden vs invariant violation
-        if not Item.objects.filter(id=item_id).exists():
+        if not Item.objects.filter(item_id=item_id).exists():
             return None
 
-        if not Item.objects.filter(id=item_id, owner_id=user_id).exists():
+        if not Item.objects.filter(item_id=item_id, owner=user_id).exists():
             raise PermissionError("forbidden")
 
         raise ValueError("qty cannot go below 0")

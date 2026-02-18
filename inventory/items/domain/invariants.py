@@ -19,3 +19,6 @@ def normalize_and_validate_item(data: dict) -> dict:
         "name": name,
         "qty": qty,
     }
+
+def normailize_and_validate_user():
+    ...
